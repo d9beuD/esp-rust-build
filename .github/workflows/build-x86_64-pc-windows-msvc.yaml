@@ -37,8 +37,12 @@ jobs:
   build-xtensa-rust:
     name: Build Xtensa Rust
     needs: get_release
-    runs-on: [self-hosted, Windows]
+    runs-on: windows-2022
     steps:
+      - name: Verify x86_64 runner
+        shell: powershell
+        run: |
+          if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'x86_64 runner required' }
       - name: Checkout repository
         uses: actions/checkout@v6
       - name: Checkout repository - d9beuD/esp-rust

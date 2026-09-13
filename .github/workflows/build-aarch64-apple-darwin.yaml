@@ -37,16 +37,15 @@ jobs:
   build-xtensa-rust:
     name: Build Xtensa Rust
     needs: get_release
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
     strategy:
       matrix:
-        os: [macos-m1-self-hosted]
         include:
-          - os: macos-m1-self-hosted
-            ASSET_PATH: "build/dist/rust-nightly-aarch64-apple-darwin.tar.xz"
-            ASSET_NAME: "rust-${{ github.event.inputs.release_version }}-aarch64-apple-darwin.tar.xz"
+          - ASSET_NAME: "rust-${{ github.event.inputs.release_version }}-aarch64-apple-darwin.tar.xz"
             ASSET_CONTENT_TYPE: "application/x-tar"
     steps:
+      - name: Verify ARM64 runner
+        run: test "$(uname -m)" = arm64
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -64,7 +63,11 @@ jobs:
           cp build/dist/rust-src-nightly.tar.xz "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
           commit=$(git rev-parse HEAD)
           printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"aarch64-apple-darwin","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > evidence.json
-          sha256sum "rust-${{ github.event.inputs.release_version }}-aarch64-apple-darwin.tar.xz" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS
+          if command -v sha256sum >/dev/null; then
+            sha256sum "rust-${{ github.event.inputs.release_version }}-aarch64-apple-darwin.tar.xz" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS
+          else
+            shasum -a 256 "rust-${{ github.event.inputs.release_version }}-aarch64-apple-darwin.tar.xz" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS
+          fi
       - name: Upload run artifacts
         uses: actions/upload-artifact@v4
         with:
