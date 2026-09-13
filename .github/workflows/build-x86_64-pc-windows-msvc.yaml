@@ -69,7 +69,8 @@ jobs:
         working-directory: "R:"
         shell: powershell
         run: |
-          python x.py dist --stage 2 rust-src
+          python x.py dist --stage 2 rustc rust-std cargo clippy rustfmt rust-src
+          Get-ChildItem build/dist -Recurse | Select-Object FullName
       - name: Repackage binary
         shell: powershell
         working-directory: "R:/build/dist"

@@ -18,4 +18,5 @@ cd "$checkout"
 # this doesn't work in the docker container when the host is ARM64, it fails at the documentation stage, which can be skipped with `--disable-docs`
 # however, at the time of writing this disables rustdoc tool creation, which we need in the toolchain. Until this is fixed, we can just build on an x86_64 host.
 python3 src/bootstrap/configure.py --experimental-targets=Xtensa --release-channel=nightly --release-description="${RELEASE_VERSION}" --enable-extended --enable-cargo-native-static --tools=rustdoc,clippy,cargo,rustfmt,rust-analyzer-proc-macro-srv,src --dist-compression-formats='xz' --enable-lld --enable-profiler --host x86_64-unknown-linux-gnu --set build.rustfmt="$(command -v rustfmt)"
-python3 x.py dist --stage 2 rust-src
+python3 x.py dist --stage 2 rustc rust-std cargo clippy rustfmt rust-src
+find build/dist -mindepth 1 -maxdepth 2 -print | sort
