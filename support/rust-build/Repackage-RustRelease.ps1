@@ -3,27 +3,33 @@ param (
     [Parameter()]
     [String]
     [ValidateSet("x86_64-pc-windows-msvc", "x86_64-pc-windows-gnu")]
-    $DefaultHost = "x86_64-pc-windows-msvc"
+    $DefaultHost = "x86_64-pc-windows-msvc",
+    [Parameter()]
+    [String]
+    $ReleaseVersion = "1.98.0.0"
 )
 # Helper script to perform repackaging of Windows release
 
 # Stop on error
 $ErrorActionPreference = "Stop"
 
-$RustVersion="nightly"
-$ReleaseVersion="1.98.0.0"
-
 if (Test-Path -Path esp -PathType Container) {
     Remove-Item -Recurse -Force -Path esp
     rm *.tar
 }
 
-$RustVersionHost = "${RustVersion}-${DefaultHost}"
+$RustArchives = @(Get-ChildItem -File -Filter "rust-*-${DefaultHost}.tar.xz")
+if ($RustArchives.Count -ne 1) { throw "expected one stage2 host archive, found $($RustArchives.Count)" }
+$RustArchive = $RustArchives[0]
+$RustVersionHost = $RustArchive.BaseName
+$RustVersion = $RustVersionHost.Substring(5, $RustVersionHost.Length - 5 - $DefaultHost.Length - 1)
 
 mkdir esp
-7z e rust-${RustVersionHost}.tar.xz
-7z x rust-${RustVersionHost}.tar
-pushd rust-${RustVersionHost}
+7z e $RustArchive.Name
+7z x "${RustVersionHost}.tar"
+$RustDirectories = @(Get-ChildItem -Directory -Filter "rust-*-${DefaultHost}")
+if ($RustDirectories.Count -ne 1) { throw "expected one stage2 host directory, found $($RustDirectories.Count)" }
+pushd $RustDirectories[0].Name
 cp -Recurse .\rustc\bin ..\esp\
 cp -Recurse .\rustc\lib ..\esp\
 cp -Recurse .\rustc\libexec ..\esp\

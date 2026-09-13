@@ -74,12 +74,18 @@ jobs:
         shell: powershell
         working-directory: "R:/build/dist"
         run: |
-          &"$env:GITHUB_WORKSPACE/support/rust-build/Repackage-RustRelease.ps1" -DefaultHost x86_64-pc-windows-msvc
+          &"$env:GITHUB_WORKSPACE/support/rust-build/Repackage-RustRelease.ps1" -DefaultHost x86_64-pc-windows-msvc -ReleaseVersion "${{ github.event.inputs.release_version }}"
       - name: Prepare release assets and provenance
         shell: bash
         run: |
           cp "rust/build/dist/rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip" "rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip"
-          cp rust/build/dist/rust-src-nightly.tar.xz "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
+          shopt -s nullglob
+          source_archives=(rust/build/dist/rust-src-*.tar.xz)
+          if [ "${#source_archives[@]}" -ne 1 ]; then
+            printf 'expected one stage2 source archive, found %s\n' "${#source_archives[@]}" >&2
+            exit 1
+          fi
+          mv "${source_archives[0]}" "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
           commit=$(git -C rust rev-parse HEAD)
           printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"x86_64-pc-windows-msvc","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > evidence.json
           sha256sum "rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS

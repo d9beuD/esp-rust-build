@@ -65,8 +65,18 @@ jobs:
           docker cp rust-linux:/home/rust/rust/build/dist build/dist
       - name: Prepare release assets and provenance
         run: |
-          cp build/dist/rust-nightly-x86_64-unknown-linux-gnu.tar.xz "rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz"
-          cp build/dist/rust-src-nightly.tar.xz "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
+          shopt -s nullglob
+          archives=(build/dist/rust-*-x86_64-unknown-linux-gnu.tar.xz)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            printf 'expected one stage2 host archive, found %s\n' "${#archives[@]}" >&2
+            exit 1
+          fi
+          stage_version=${archives[0]#build/dist/rust-}
+          stage_version=${stage_version%-x86_64-unknown-linux-gnu.tar.xz}
+          source_archive="build/dist/rust-src-${stage_version}.tar.xz"
+          test -f "$source_archive"
+          mv "${archives[0]}" "rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz"
+          mv "$source_archive" "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
           commit=$(git -C rust rev-parse HEAD)
           printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"x86_64-unknown-linux-gnu","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > evidence.json
           sha256sum "rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS

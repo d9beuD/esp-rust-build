@@ -163,6 +163,35 @@ fn release_workflows_generate_manifest_that_rejects_mutated_assets() {
 }
 
 #[test]
+fn host_packaging_discovers_one_stage2_output_before_renaming_release_assets() {
+    let workflows = build_root().join(".github/workflows");
+    for (workflow, host) in host_workflows() {
+        let source = read(&workflows.join(workflow));
+        if host.contains("windows") {
+            assert!(source.contains("source_archives=(rust/build/dist/rust-src-*.tar.xz)"));
+            assert!(source.contains("[ \"${#source_archives[@]}\" -ne 1 ]"));
+        } else {
+            let archive = format!("archives=(build/dist/rust-*-{host}.tar.xz)");
+            assert!(source.contains(&archive), "{workflow} must discover its stage2 host archive");
+            assert!(source.contains("[ \"${#archives[@]}\" -ne 1 ]"));
+            assert!(source.contains("mv \"${archives[0]}\" \"rust-${{ github.event.inputs.release_version }}"));
+        }
+    }
+
+    let repackage = read(&build_root().join("support/rust-build/Repackage-RustRelease.ps1"));
+    for required in [
+        "Get-ChildItem -File -Filter \"rust-*-${DefaultHost}.tar.xz\"",
+        "$RustArchives.Count -ne 1",
+        "Get-ChildItem -Directory -Filter \"rust-*-${DefaultHost}\"",
+        "$RustDirectories.Count -ne 1",
+    ] {
+        assert!(repackage.contains(required), "Windows packaging must contain {required}");
+    }
+    let workflow = read(&workflows.join("build-x86_64-pc-windows-msvc.yaml"));
+    assert!(workflow.contains("-ReleaseVersion \"${{ github.event.inputs.release_version }}\""));
+}
+
+#[test]
 fn rust_src_workflow_renames_dist_archive_before_provenance_and_checksum() {
     let source = read(&build_root().join(".github/workflows/build-rust-src.yaml"));
     let archive = "rust-src-${{ github.event.inputs.release_version }}.tar.xz";
