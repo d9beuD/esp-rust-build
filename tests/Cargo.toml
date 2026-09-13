@@ -1,0 +1,8 @@
+[package]
+name = "esp8266-release-contract-tests"
+version = "0.0.0"
+edition = "2021"
+
+[[test]]
+name = "release_contract"
+path = "release_contract.rs"

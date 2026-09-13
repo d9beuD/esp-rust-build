@@ -12,6 +12,9 @@ on:
         required: true
         default: "v1.98.0.0"
 
+permissions:
+  contents: write
+
 jobs:
   get_release:
     name: Get release
@@ -22,7 +25,7 @@ jobs:
       - uses: octokit/request-action@v2.x
         id: get_release
         with:
-          route: GET /repos/esp-rs/rust-build/releases/tags/${{ github.event.inputs.release_tag }}
+          route: GET /repos/d9beuD/esp-rust-build/releases/tags/${{ github.event.inputs.release_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: get upload url
@@ -40,17 +43,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Checkout repository - esp-rs/rust
+      - name: Checkout repository - d9beuD/esp-rust
         uses: actions/checkout@v6
         with:
           path: rust
-          repository: esp-rs/rust
+          repository: d9beuD/esp-rust
           ref: esp-${{ github.event.inputs.release_version }}
           submodules: true
       - name: Unmount local drive
         id: unount_path_before
-        continue-on-error: true
-        run: subst "R:" /D
+        shell: powershell
+        run: if (subst | Select-String -Quiet 'R:') { subst "R:" /D }
       - name: Map local long path to new drive
         id: map_path
         shell: powershell
@@ -62,15 +65,22 @@ jobs:
           python src/bootstrap/configure.py --experimental-targets=Xtensa --release-channel=nightly --release-description="${{ github.event.inputs.release_version }}" --enable-extended --tools=rustdoc,clippy,cargo,rustfmt,rust-analyzer-proc-macro-srv,analysis,rust-analysis,src --dist-compression-formats='xz' --enable-lld --enable-profiler
       - name: Build with x.py - dist packages
         working-directory: "R:"
-        continue-on-error: true
         shell: powershell
         run: |
-          python x.py dist --stage 2
+          python x.py dist --stage 2 rust-src
       - name: Repackage binary
         shell: powershell
         working-directory: "R:/build/dist"
         run: |
           &"$env:GITHUB_WORKSPACE/support/rust-build/Repackage-RustRelease.ps1" -DefaultHost x86_64-pc-windows-msvc
+      - name: Prepare release assets and provenance
+        shell: bash
+        run: |
+          cp "rust/build/dist/rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip" "rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip"
+          cp rust/build/dist/rust-src-nightly.tar.xz "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
+          commit=$(git -C rust rev-parse HEAD)
+          printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"x86_64-pc-windows-msvc","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > evidence.json
+          sha256sum "rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
@@ -78,10 +88,35 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.get_release.outputs.upload_url }}
-          asset_path: rust/build/dist/rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip
+          asset_path: rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip
           asset_name: rust-${{ github.event.inputs.release_version }}-x86_64-pc-windows-msvc.zip
           asset_content_type: application/x-tar
+      - name: Upload source, checksums, and evidence
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: rust-src-${{ github.event.inputs.release_version }}.tar.xz
+          asset_name: rust-src-${{ github.event.inputs.release_version }}.tar.xz
+          asset_content_type: application/x-tar
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: text/plain
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: evidence.json
+          asset_name: evidence.json
+          asset_content_type: application/json
       - name: Unmount local drive
         id: unount_path
-        continue-on-error: true
-        run: subst "R:" /D
+        shell: powershell
+        run: if (subst | Select-String -Quiet 'R:') { subst "R:" /D }

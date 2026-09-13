@@ -3,3 +3,5 @@
 *.tar.xz
 export-*.sh
 Export-*.ps1
+.tools/
+tests/target/

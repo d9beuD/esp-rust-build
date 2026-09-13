@@ -11,6 +11,9 @@ on:
         required: true
         default: "v1.98.0.0"
 
+permissions:
+  contents: write
+
 jobs:
   get_release:
     name: Get release
@@ -21,7 +24,7 @@ jobs:
       - uses: octokit/request-action@v2.x
         id: get_release
         with:
-          route: GET /repos/esp-rs/rust-build/releases/tags/${{ github.event.inputs.release_tag }}
+          route: GET /repos/d9beuD/esp-rust-build/releases/tags/${{ github.event.inputs.release_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: get upload url
@@ -58,9 +61,15 @@ jobs:
           else
             echo "Docker is already running."
           fi
-          docker container rm rust-linux || echo "Container name rust-linux is available"
+          docker container rm rust-linux || true
       - name: Checkout repository
         uses: actions/checkout@v6
+      - name: Checkout d9beuD/esp-rust provenance source
+        uses: actions/checkout@v6
+        with:
+          repository: d9beuD/esp-rust
+          ref: esp-${{ github.event.inputs.release_version }}
+          path: rust
       - name: Build construction container
         run: |
           cd support/rust-build/x86_64-unknown-linux-gnu
@@ -70,6 +79,13 @@ jobs:
           docker run -e RELEASE_VERSION='${{ github.event.inputs.release_version }}' --name rust-linux ubuntu-builder ./build.sh
           mkdir -p build
           docker cp rust-linux:/home/rust/rust/build/dist build/dist
+      - name: Prepare release assets and provenance
+        run: |
+          cp build/dist/rust-nightly-x86_64-unknown-linux-gnu.tar.xz "rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz"
+          cp build/dist/rust-src-nightly.tar.xz "rust-src-${{ github.event.inputs.release_version }}.tar.xz"
+          commit=$(git -C rust rev-parse HEAD)
+          printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"x86_64-unknown-linux-gnu","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > evidence.json
+          sha256sum "rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz" "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > SHA256SUMS
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
@@ -77,9 +93,34 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.get_release.outputs.upload_url }}
-          asset_path: ${{ matrix.ASSET_PATH }}
+          asset_path: rust-${{ github.event.inputs.release_version }}-x86_64-unknown-linux-gnu.tar.xz
           asset_name: ${{ matrix.ASSET_NAME }}
           asset_content_type: ${{ matrix.ASSET_CONTENT_TYPE }}
+      - name: Upload source, checksums, and evidence
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: rust-src-${{ github.event.inputs.release_version }}.tar.xz
+          asset_name: rust-src-${{ github.event.inputs.release_version }}.tar.xz
+          asset_content_type: application/x-tar
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: text/plain
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: evidence.json
+          asset_name: evidence.json
+          asset_content_type: application/json
       - name: Clean up
         run: |
           docker container rm rust-linux

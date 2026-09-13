@@ -26,7 +26,7 @@ jobs:
             Installation: https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html
 
             ```
-            espup install --toolchain-version ${{ steps.findandreplace.outputs.value }}
+            espup install --toolchain-version ${{ github.event.inputs.next_release }}
             source ~/export-esp.sh
             ```
 

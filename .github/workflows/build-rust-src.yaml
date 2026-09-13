@@ -12,6 +12,9 @@ on:
         required: true
         default: "v1.98.0.0"
 
+permissions:
+  contents: write
+
 jobs:
   get_release:
     name: Get release
@@ -22,7 +25,7 @@ jobs:
       - uses: octokit/request-action@v2.x
         id: get_release
         with:
-          route: GET /repos/esp-rs/rust-build/releases/tags/${{ github.event.inputs.release_tag }}
+          route: GET /repos/d9beuD/esp-rust-build/releases/tags/${{ github.event.inputs.release_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: get upload url
@@ -49,7 +52,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          repository: esp-rs/rust
+          repository: d9beuD/esp-rust
           ref: esp-${{ github.event.inputs.release_version }}
           submodules: true
           path: "rust"
@@ -63,6 +66,11 @@ jobs:
         working-directory: rust
         run: |
           python3 x.py dist rust-src
+      - name: Record source provenance
+        working-directory: rust
+        run: |
+          commit=$(git rev-parse HEAD)
+          printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"rust-src","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > ../evidence.json
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
@@ -73,3 +81,12 @@ jobs:
           asset_path: ${{ matrix.ASSET_PATH }}
           asset_name: ${{ matrix.ASSET_NAME }}
           asset_content_type: ${{ matrix.ASSET_CONTENT_TYPE }}
+      - name: Upload evidence
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.get_release.outputs.upload_url }}
+          asset_path: evidence.json
+          asset_name: evidence.json
+          asset_content_type: application/json
