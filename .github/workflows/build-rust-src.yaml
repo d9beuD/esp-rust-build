@@ -67,10 +67,10 @@ jobs:
       - name: Record source provenance
         working-directory: rust
         run: |
+          cp build/dist/rust-src-nightly.tar.xz "../rust-src-${{ github.event.inputs.release_version }}.tar.xz"
           commit=$(git rev-parse HEAD)
           printf '{"tag":"%s","version":"%s","source":{"repository":"https://github.com/d9beuD/esp-rust.git","commit":"%s"},"host":"rust-src","ci":"success"}\n' "${{ github.event.inputs.release_tag }}" "${{ github.event.inputs.release_version }}" "$commit" > ../evidence.json
-          cp build/dist/rust-src-nightly.tar.xz "../rust-src-${{ github.event.inputs.release_version }}.tar.xz"
-          sha256sum "rust-src-${{ github.event.inputs.release_version }}.tar.xz" > ../SHA256SUMS
+          sha256sum "../rust-src-${{ github.event.inputs.release_version }}.tar.xz" > ../SHA256SUMS
       - name: Upload run artifacts
         uses: actions/upload-artifact@v4
         with:

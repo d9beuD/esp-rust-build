@@ -84,7 +84,7 @@ fn every_release_workflow_publishes_named_stage2_source_manifest_and_evidence() 
 }
 
 #[test]
-fn every_release_workflow_records_resolved_fork_commit_provenance() {
+fn release_workflows_use_explicit_source_refs_and_optional_release_uploads() {
     let workflows = build_root().join(".github/workflows");
     let mut violations = Vec::new();
     for workflow in [
@@ -94,13 +94,53 @@ fn every_release_workflow_records_resolved_fork_commit_provenance() {
         "build-rust-src.yaml",
     ] {
         let source = read(&workflows.join(workflow));
-        for required in ["d9beuD/esp-rust", "esp-${{ github.event.inputs.release_version }}", "evidence.json", FORK] {
+        for required in [
+            "source_ref:",
+            "required: true",
+            "repository: d9beuD/esp-rust",
+            "ref: ${{ github.event.inputs.source_ref }}",
+            "evidence.json",
+            FORK,
+        ] {
             if !source.contains(required) {
                 violations.push(format!("{workflow} missing {required}"));
             }
         }
+        let source_ref_input = source
+            .split("source_ref:")
+            .nth(1)
+            .and_then(|input| input.split("release_tag:").next());
+        if source_ref_input.is_none_or(|input| input.contains("default:")) {
+            violations.push(format!("{workflow} does not require an explicit source_ref"));
+        }
         if !source.contains("rev-parse HEAD") {
             violations.push(format!("{workflow} does not resolve a 40-character source commit"));
+        }
+
+        if !source.contains("release_tag:")
+            || !source.contains(&format!("default: \"v{VERSION}\""))
+        {
+            violations.push(format!("{workflow} does not retain a v-prefixed release_tag"));
+        }
+
+        let run_artifact_step = source
+            .split("- name: Upload run artifacts")
+            .nth(1)
+            .and_then(|step| step.split("\n      - ").next());
+        match run_artifact_step {
+            Some(step)
+                if step.contains("uses: actions/upload-artifact@v4")
+                    && !step.contains("needs.get_release.outputs.upload_url") => {}
+            _ => violations.push(format!("{workflow} does not upload run artifacts without a release")),
+        }
+
+        for step in source
+            .split("\n      - ")
+            .filter(|step| step.contains("uses: actions/upload-release-asset@v1"))
+        {
+            if !step.contains("if: needs.get_release.outputs.upload_url != ''") {
+                violations.push(format!("{workflow} uploads a release asset without an existing release"));
+            }
         }
     }
     assert!(violations.is_empty(), "{}", violations.join("; "));
@@ -120,6 +160,20 @@ fn release_workflows_generate_manifest_that_rejects_mutated_assets() {
         }
     }
     assert!(violations.is_empty(), "{}", violations.join("; "));
+}
+
+#[test]
+fn rust_src_workflow_renames_dist_archive_before_provenance_and_checksum() {
+    let source = read(&build_root().join(".github/workflows/build-rust-src.yaml"));
+    let archive = "rust-src-${{ github.event.inputs.release_version }}.tar.xz";
+    let rename = format!("cp build/dist/rust-src-nightly.tar.xz \"../{archive}\"");
+    let provenance = "printf '{\"tag\":\"%s\"";
+    let checksum = format!("sha256sum \"../{archive}\" > ../SHA256SUMS");
+
+    let renamed_at = source.find(&rename).expect("rust-src dist archive must be renamed for release");
+    let provenance_at = source.find(provenance).expect("rust-src provenance must be recorded");
+    let checksum_at = source.find(&checksum).expect("renamed rust-src archive must be checksummed");
+    assert!(renamed_at < provenance_at && provenance_at < checksum_at);
 }
 
 #[test]
