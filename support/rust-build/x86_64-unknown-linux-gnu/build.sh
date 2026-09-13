@@ -6,12 +6,12 @@ checkout=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rust
 
 if git -C "$checkout" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git -C "$checkout" remote set-url origin https://github.com/d9beuD/esp-rust.git
-    git -C "$checkout" fetch --depth 1 origin "esp-${RELEASE_VERSION}"
+    git -C "$checkout" fetch --depth 1 origin "${SOURCE_REF:-esp-${RELEASE_VERSION}}"
     git -C "$checkout" checkout --detach FETCH_HEAD
     git -C "$checkout" submodule update --init --recursive --depth 1
 else
     rm -rf "$checkout"
-    git clone --recursive --depth 1 --shallow-submodules https://github.com/d9beuD/esp-rust.git "$checkout" -b "esp-${RELEASE_VERSION}"
+    git clone --recursive --depth 1 --shallow-submodules https://github.com/d9beuD/esp-rust.git "$checkout" -b "${SOURCE_REF:-esp-${RELEASE_VERSION}}"
 fi
 cd "$checkout"
 # TODO
